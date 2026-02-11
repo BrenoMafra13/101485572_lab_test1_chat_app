@@ -1,0 +1,38 @@
+body {
+  min-height: 100vh;
+  background: #e7ba32;
+  font-family: Arial, sans-serif;
+}
+
+.card {
+  border-radius: 6px;
+  border: 1px solid #203a73;
+  background: #2f4f90;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.form-control {
+  border-radius: 4px;
+  border-color: #203a73;
+}
+
+.btn-primary {
+  border-radius: 4px;
+  background: #203a73;
+  border-color: #203a73;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background: #1b2f5c;
+  border-color: #1b2f5c;
+}
+
+a {
+  color: #ffe7cc;
+}
+
+a:hover {
+  color: #ffffff;
+}
