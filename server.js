@@ -119,21 +119,27 @@ app.get('/api/messages/private/:userA/:userB', async (req, res) => {
 io.on('connection', (socket) => {
   const username = socket.handshake.query.username
   if (username) {
+    socket.data.username = username
     socket.join(`user:${username}`)
   }
 
   socket.on('joinRoom', ({ room }) => {
     if (!room) return
     socket.join(room)
+    socket.data.room = room
   })
 
   socket.on('leaveRoom', ({ room }) => {
     if (!room) return
     socket.leave(room)
+    if (socket.data.room === room) {
+      socket.data.room = null
+    }
   })
 
   socket.on('groupMessage', async ({ room, fromUser, message }) => {
     if (!room || !fromUser || !message) return
+    if (!socket.data.room || socket.data.room !== room) return
     const dateSent = new Date().toLocaleString('en-US')
     const saved = await GroupMessage.create({ room, fromUser, message, dateSent })
     io.to(room).emit('groupMessage', saved)
