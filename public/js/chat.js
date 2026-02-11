@@ -7,14 +7,22 @@ $(function () {
 
   const rooms = ['Friends room', 'Gaming room', 'Musics room', 'COMP3133 room', 'Movies room']
   let activeRoom = null
+  let activePrivateUser = null
+  let typingTimer = null
 
   const roomList = $('#roomList')
   const userList = $('#userList')
   const groupMessages = $('#groupMessages')
   const groupInput = $('#groupInput')
   const groupButton = $('#groupForm button')
+  const privateMessages = $('#privateMessages')
+  const privateInput = $('#privateInput')
+  const privateButton = $('#privateForm button')
+  const typingIndicator = $('#typingIndicator')
 
-  const socket = io()
+  const socket = io({
+    query: { username }
+  })
 
   const escapeHtml = (value) => $('<div>').text(value).html()
 
@@ -42,7 +50,7 @@ $(function () {
     const data = await res.json()
     userList.empty()
     data.filter((user) => user.username !== username).forEach((user) => {
-      const button = $(`<button class="btn btn-outline-light w-100 mb-2" type="button">${user.username}</button>`)
+      const button = $(`<button class="btn btn-outline-light w-100 mb-2" type="button" data-user="${user.username}">${user.username}</button>`)
       userList.append(button)
     })
   }
@@ -60,6 +68,19 @@ $(function () {
     data.forEach(addGroupMessage)
   }
 
+  const addPrivateMessage = (msg) => {
+    const line = `<div class="mb-2"><strong>${escapeHtml(msg.fromUser)}</strong>: ${escapeHtml(msg.message)} <span class="small">(${escapeHtml(msg.dateSent)})</span></div>`
+    privateMessages.append(line)
+  }
+
+  const loadPrivateMessages = async (user) => {
+    if (!user) return
+    const res = await fetch(`/api/messages/private/${encodeURIComponent(username)}/${encodeURIComponent(user)}`)
+    const data = await res.json()
+    privateMessages.empty()
+    data.forEach(addPrivateMessage)
+  }
+
   roomList.on('click', 'button', function () {
     const nextRoom = $(this).data('room')
     if (activeRoom) {
@@ -70,6 +91,17 @@ $(function () {
     renderRooms()
     socket.emit('joinRoom', { room: activeRoom })
     loadGroupMessages(activeRoom)
+  })
+
+  userList.on('click', 'button', function () {
+    const user = $(this).data('user')
+    activePrivateUser = user
+    $('#activePrivate').text(user || '')
+    typingIndicator.text('')
+    privateMessages.empty()
+    privateInput.prop('disabled', false).attr('placeholder', 'Type a private message')
+    privateButton.prop('disabled', false)
+    loadPrivateMessages(user)
   })
 
   $('#leaveRoomBtn').on('click', function () {
@@ -89,6 +121,23 @@ $(function () {
     $('#groupInput').val('')
   })
 
+  $('#privateForm').on('submit', function (event) {
+    event.preventDefault()
+    const message = $('#privateInput').val().trim()
+    if (!activePrivateUser || !message) return
+    socket.emit('privateMessage', { fromUser: username, toUser: activePrivateUser, message })
+    $('#privateInput').val('')
+  })
+
+  $('#privateInput').on('input', function () {
+    if (!activePrivateUser) return
+    socket.emit('privateTyping', { fromUser: username, toUser: activePrivateUser, isTyping: true })
+    clearTimeout(typingTimer)
+    typingTimer = setTimeout(() => {
+      socket.emit('privateTyping', { fromUser: username, toUser: activePrivateUser, isTyping: false })
+    }, 800)
+  })
+
   $('#logoutBtn').on('click', function () {
     localStorage.removeItem('chatUsername')
     window.location.href = '/view/login.html'
@@ -97,6 +146,18 @@ $(function () {
   socket.on('groupMessage', (msg) => {
     if (msg.room !== activeRoom) return
     addGroupMessage(msg)
+  })
+
+  socket.on('privateMessage', (msg) => {
+    const relevant = (msg.fromUser === username && msg.toUser === activePrivateUser) ||
+      (msg.toUser === username && msg.fromUser === activePrivateUser)
+    if (!relevant) return
+    addPrivateMessage(msg)
+  })
+
+  socket.on('privateTyping', ({ fromUser, isTyping }) => {
+    if (fromUser !== activePrivateUser) return
+    typingIndicator.text(isTyping ? `${fromUser} is typing...` : '')
   })
 
   renderRooms()

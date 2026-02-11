@@ -40,6 +40,18 @@
               </form>
             </div>
           </div>
+
+          <div class="card mt-3">
+            <div class="card-header">Private Chat: <span id="activePrivate" class="ms-2"></span></div>
+            <div class="card-body" id="privateMessages"></div>
+            <div class="card-footer">
+              <div id="typingIndicator" class="small mb-2"></div>
+              <form id="privateForm" class="d-flex gap-2">
+                <input id="privateInput" class="form-control" placeholder="Select a user to chat" autocomplete="off" disabled />
+                <button class="btn btn-primary" type="submit" disabled>Send</button>
+              </form>
+            </div>
+          </div>
         </div>
         <div class="col-lg-4">
           <div class="card">

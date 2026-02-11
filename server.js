@@ -28,8 +28,16 @@ const groupMessageSchema = new mongoose.Schema({
   dateSent: { type: String, required: true }
 })
 
+const privateMessageSchema = new mongoose.Schema({
+  fromUser: { type: String, required: true },
+  toUser: { type: String, required: true },
+  message: { type: String, required: true },
+  dateSent: { type: String, required: true }
+})
+
 const User = mongoose.model('User', userSchema)
 const GroupMessage = mongoose.model('GroupMessage', groupMessageSchema)
+const PrivateMessage = mongoose.model('PrivateMessage', privateMessageSchema)
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
@@ -93,7 +101,27 @@ app.get('/api/messages/group/:room', async (req, res) => {
   }
 })
 
+app.get('/api/messages/private/:userA/:userB', async (req, res) => {
+  try {
+    const { userA, userB } = req.params
+    const messages = await PrivateMessage.find({
+      $or: [
+        { fromUser: userA, toUser: userB },
+        { fromUser: userB, toUser: userA }
+      ]
+    }).sort({ _id: 1 })
+    return res.json(messages)
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to load messages' })
+  }
+})
+
 io.on('connection', (socket) => {
+  const username = socket.handshake.query.username
+  if (username) {
+    socket.join(`user:${username}`)
+  }
+
   socket.on('joinRoom', ({ room }) => {
     if (!room) return
     socket.join(room)
@@ -109,6 +137,18 @@ io.on('connection', (socket) => {
     const dateSent = new Date().toLocaleString('en-US')
     const saved = await GroupMessage.create({ room, fromUser, message, dateSent })
     io.to(room).emit('groupMessage', saved)
+  })
+
+  socket.on('privateMessage', async ({ fromUser, toUser, message }) => {
+    if (!fromUser || !toUser || !message) return
+    const dateSent = new Date().toLocaleString('en-US')
+    const saved = await PrivateMessage.create({ fromUser, toUser, message, dateSent })
+    io.to(`user:${fromUser}`).to(`user:${toUser}`).emit('privateMessage', saved)
+  })
+
+  socket.on('privateTyping', ({ fromUser, toUser, isTyping }) => {
+    if (!fromUser || !toUser) return
+    io.to(`user:${toUser}`).emit('privateTyping', { fromUser, isTyping })
   })
 })
 
