@@ -8,13 +8,15 @@ $(function () {
   const rooms = ['Friends room', 'Gaming room', 'Musics room', 'COMP3133 room', 'Movies room']
   let activeRoom = null
 
-  $('#currentUser').text(username)
-
   const roomList = $('#roomList')
   const userList = $('#userList')
   const groupMessages = $('#groupMessages')
   const groupInput = $('#groupInput')
   const groupButton = $('#groupForm button')
+
+  const socket = io()
+
+  const escapeHtml = (value) => $('<div>').text(value).html()
 
   const renderRooms = () => {
     roomList.empty()
@@ -25,6 +27,7 @@ $(function () {
       }
       roomList.append(button)
     })
+
     if (activeRoom) {
       groupInput.prop('disabled', false).attr('placeholder', 'Type a message')
       groupButton.prop('disabled', false)
@@ -44,20 +47,34 @@ $(function () {
     })
   }
 
-  const addGroupMessage = (fromUser, message) => {
-    const time = new Date().toLocaleTimeString('en-US')
-    const line = `<div class="mb-2"><strong>${fromUser}</strong>: ${message} <span class="small">(${time})</span></div>`
+  const addGroupMessage = (msg) => {
+    const line = `<div class="mb-2"><strong>${escapeHtml(msg.fromUser)}</strong>: ${escapeHtml(msg.message)} <span class="small">(${escapeHtml(msg.dateSent)})</span></div>`
     groupMessages.append(line)
   }
 
-  roomList.on('click', 'button', function () {
-    activeRoom = $(this).data('room')
-    $('#activeRoom').text(activeRoom)
+  const loadGroupMessages = async (room) => {
+    if (!room) return
+    const res = await fetch(`/api/messages/group/${encodeURIComponent(room)}`)
+    const data = await res.json()
     groupMessages.empty()
+    data.forEach(addGroupMessage)
+  }
+
+  roomList.on('click', 'button', function () {
+    const nextRoom = $(this).data('room')
+    if (activeRoom) {
+      socket.emit('leaveRoom', { room: activeRoom })
+    }
+    activeRoom = nextRoom
+    $('#activeRoom').text(activeRoom)
     renderRooms()
+    socket.emit('joinRoom', { room: activeRoom })
+    loadGroupMessages(activeRoom)
   })
 
   $('#leaveRoomBtn').on('click', function () {
+    if (!activeRoom) return
+    socket.emit('leaveRoom', { room: activeRoom })
     activeRoom = null
     $('#activeRoom').text('')
     groupMessages.empty()
@@ -68,13 +85,18 @@ $(function () {
     event.preventDefault()
     const message = $('#groupInput').val().trim()
     if (!activeRoom || !message) return
-    addGroupMessage(username, message)
+    socket.emit('groupMessage', { room: activeRoom, fromUser: username, message })
     $('#groupInput').val('')
   })
 
   $('#logoutBtn').on('click', function () {
     localStorage.removeItem('chatUsername')
     window.location.href = '/view/login.html'
+  })
+
+  socket.on('groupMessage', (msg) => {
+    if (msg.room !== activeRoom) return
+    addGroupMessage(msg)
   })
 
   renderRooms()
